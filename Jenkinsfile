@@ -19,10 +19,20 @@ pipeline {
         sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
       }
     }
-    stage('Push (optional)') {
-      when { expression { return false } } // change to true & add credentials
+    stage('Docker Push') {
+      when { expression { return true } }
       steps {
-        echo 'Push to registry - configure credentials and enable this stage.'
+        script {
+          // Login to Docker registry using Jenkins credentials
+          withCredentials([usernamePassword(credentialsId: 'docker-registry-credentials', 
+                                          usernameVariable: 'DOCKER_USERNAME', 
+                                          passwordVariable: 'DOCKER_PASSWORD')]) {
+            sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
+            sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
+            sh "docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest"
+            sh "docker push ${IMAGE_NAME}:latest"
+          }
+        }
       }
     }
   }
