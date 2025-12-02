@@ -1,0 +1,38 @@
+# Docker Compose for Local Development
+version: '3.8'
+
+services:
+  employee-management:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=local
+      - SPRING_DATASOURCE_URL=jdbc:h2:mem:testdb
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - app-network
+
+  # Optional: Add database service for production-like testing
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: employeedb
+      POSTGRES_USER: employee_user
+      POSTGRES_PASSWORD: employee_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    profiles:
+      - with-db
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
