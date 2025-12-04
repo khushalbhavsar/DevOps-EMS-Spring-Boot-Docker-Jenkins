@@ -18,6 +18,12 @@ pipeline {
   // Run this pipeline on any available Jenkins agent
   agent any
 
+  // Tools section - configures JDK and Maven for the pipeline
+  tools {
+    jdk 'JDK21'        // Java Development Kit 21
+    maven 'Maven3'     // Maven 3.x for building the project
+  }
+
   // Global environment variables available to all pipeline stages
   environment {
     IMAGE_NAME = "employee-management"                    // Local Docker image name
