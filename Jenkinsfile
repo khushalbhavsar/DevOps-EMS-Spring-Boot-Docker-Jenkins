@@ -129,7 +129,52 @@ pipeline {
     }
 
     /*
-     * STAGE 6: DOCKER HUB DEPLOYMENT
+     * STAGE 6: DOCKER HUB REPOSITORY CHECK/CREATE
+     * Ensures Docker Hub repository exists before pushing
+     * Creates repository if it doesn't exist
+     */
+    stage('Docker Hub Repo Setup') {
+      steps {
+        script {
+          echo "🔍 Checking Docker Hub repository..."
+          
+          // Use Jenkins credentials for Docker Hub API
+          withCredentials([usernamePassword(credentialsId: 'docker-registry-credentials',
+                                           usernameVariable: 'DOCKER_USERNAME',
+                                           passwordVariable: 'DOCKER_PASSWORD')]) {
+            
+            // Check if repository exists and create if needed
+            def repoName = "employee-management"
+            def repoExists = sh(
+              script: """
+                curl -s -o /dev/null -w '%{http_code}' \
+                -H "Content-Type: application/json" \
+                -u ${DOCKER_USERNAME}:${DOCKER_PASSWORD} \
+                https://hub.docker.com/v2/repositories/${DOCKER_USERNAME}/${repoName}/
+              """,
+              returnStdout: true
+            ).trim()
+            
+            if (repoExists == '200') {
+              echo "✅ Repository already exists: ${DOCKER_USERNAME}/${repoName}"
+            } else {
+              echo "📦 Creating Docker Hub repository: ${DOCKER_USERNAME}/${repoName}"
+              sh """
+                curl -X POST \
+                -H "Content-Type: application/json" \
+                -u ${DOCKER_USERNAME}:${DOCKER_PASSWORD} \
+                -d '{"namespace":"${DOCKER_USERNAME}","name":"${repoName}","description":"Employee Management System - Spring Boot Application","is_private":false}' \
+                https://hub.docker.com/v2/repositories/
+              """
+              echo "✅ Repository created successfully!"
+            }
+          }
+        }
+      }
+    }
+
+    /*
+     * STAGE 7: DOCKER HUB DEPLOYMENT
      * Pushes the built Docker images to Docker Hub registry
      * Makes images available for production deployment
      */
