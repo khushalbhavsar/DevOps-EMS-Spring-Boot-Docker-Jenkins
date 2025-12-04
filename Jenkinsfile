@@ -71,14 +71,11 @@ pipeline {
      * STAGE 4: DOCKER IMAGE CREATION
      * Builds Docker container image from the compiled JAR file
      * Creates both versioned and latest tags for deployment flexibility
-     * RUNS ON: Local machine (requires 'local' label on Jenkins node)
      */
     stage('Docker Build') {
-      agent { label 'local' }  // Execute on local machine with 'local' label
-      
       steps {
         script {
-          echo "Building Docker image on local machine..."
+          echo "Building Docker image..."
           
           // Clean up any existing images to prevent conflicts
           sh "docker rmi ${REGISTRY_IMAGE}:${IMAGE_TAG} || true"
@@ -92,7 +89,7 @@ pipeline {
           // Verify images were created successfully
           sh "docker images | grep ${IMAGE_NAME}"
           
-          echo "✅ Docker image built successfully on local machine!"
+          echo "✅ Docker image built successfully!"
         }
       }
     }
@@ -101,14 +98,11 @@ pipeline {
      * STAGE 5: CONTAINER INTEGRATION TESTING
      * Runs the Docker container and performs health checks to ensure
      * the application starts correctly and is accessible
-     * RUNS ON: Local machine (requires 'local' label on Jenkins node)
      */
     stage('Docker Test Run') {
-      agent { label 'local' }  // Execute on local machine with 'local' label
-      
       steps {
         script {
-          echo "Running container for test on local machine..."
+          echo "Running container for test..."
 
           // Clean up any existing test containers
           sh "docker stop employee-management-test || true"
@@ -129,7 +123,7 @@ pipeline {
           // Note: Requires Spring Boot Actuator to be enabled
           sh "curl -f http://localhost:8080/actuator/health || (echo 'Health Check Failed!' && exit 1)"
 
-          echo "Container test passed on local machine!"
+          echo "Container test passed!"
         }
       }
     }
@@ -138,18 +132,15 @@ pipeline {
      * STAGE 6: DOCKER HUB DEPLOYMENT
      * Pushes the built Docker images to Docker Hub registry
      * Makes images available for production deployment
-     * RUNS ON: Local machine (requires 'local' label on Jenkins node)
      */
     stage('Docker Push') {
-      agent { label 'local' }  // Execute on local machine with 'local' label
-      
       // Conditional execution - currently always runs (return true)
       // Can be modified to run only on specific branches or conditions
       when { expression { return true } }
       
       steps {
         script {
-          echo "🚀 Pushing images to Docker Hub from local machine..."
+          echo "🚀 Pushing images to Docker Hub..."
           
           // Use Jenkins credentials for secure Docker Hub authentication
           withCredentials([usernamePassword(credentialsId: 'docker-registry-credentials',
@@ -171,7 +162,7 @@ pipeline {
             // Logout for security best practices
             sh "docker logout"
             
-            echo "✅ Images pushed successfully to Docker Hub from local machine!"
+            echo "✅ Images pushed successfully to Docker Hub!"
             echo "🐳 Available at: https://hub.docker.com/r/khushalbhavsar/employee-management"
           }
         }
