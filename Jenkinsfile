@@ -35,6 +35,9 @@ pipeline {
     stage('Checkout') {
       steps { 
         checkout scm  // Checkout source code from version control
+        
+        // Grant execute permission to Maven wrapper for Linux systems
+        sh 'chmod +x mvnw'
       }
     }
 
@@ -78,16 +81,16 @@ pipeline {
           echo "Building Docker image on local machine..."
           
           // Clean up any existing images to prevent conflicts
-          bat "docker rmi ${REGISTRY_IMAGE}:${IMAGE_TAG} || exit 0"
-          bat "docker rmi ${REGISTRY_IMAGE}:latest || exit 0"
+          sh "docker rmi ${REGISTRY_IMAGE}:${IMAGE_TAG} || true"
+          sh "docker rmi ${REGISTRY_IMAGE}:latest || true"
           
           // Build new Docker image using Dockerfile in project root
           // Tags with both build-specific version and 'latest'
-          bat "docker build -t ${REGISTRY_IMAGE}:${IMAGE_TAG} ."
-          bat "docker tag ${REGISTRY_IMAGE}:${IMAGE_TAG} ${REGISTRY_IMAGE}:latest"
+          sh "docker build -t ${REGISTRY_IMAGE}:${IMAGE_TAG} ."
+          sh "docker tag ${REGISTRY_IMAGE}:${IMAGE_TAG} ${REGISTRY_IMAGE}:latest"
           
           // Verify images were created successfully
-          bat "docker images | findstr ${IMAGE_NAME}"
+          sh "docker images | grep ${IMAGE_NAME}"
           
           echo "✅ Docker image built successfully on local machine!"
         }
@@ -108,23 +111,23 @@ pipeline {
           echo "Running container for test on local machine..."
 
           // Clean up any existing test containers
-          bat "docker stop employee-management-test || exit 0"
-          bat "docker rm employee-management-test || exit 0"
+          sh "docker stop employee-management-test || true"
+          sh "docker rm employee-management-test || true"
 
           // Start container in detached mode for testing
           // Maps port 8080 from container to host port 8080
-          bat "docker run -d --name employee-management-test -p 8080:8080 ${REGISTRY_IMAGE}:${IMAGE_TAG}"
+          sh "docker run -d --name employee-management-test -p 8080:8080 ${REGISTRY_IMAGE}:${IMAGE_TAG}"
 
           // Wait for Spring Boot application to fully start
           echo "Waiting for application to start..."
           sleep 45
 
           // Print container logs for debugging if issues occur
-          bat "docker logs employee-management-test || exit 0"
+          sh "docker logs employee-management-test || true"
 
           // Perform health check to verify application is running
           // Note: Requires Spring Boot Actuator to be enabled
-          bat "curl -f http://localhost:8080/actuator/health || (echo Health Check Failed! && exit 1)"
+          sh "curl -f http://localhost:8080/actuator/health || (echo 'Health Check Failed!' && exit 1)"
 
           echo "Container test passed on local machine!"
         }
@@ -155,18 +158,18 @@ pipeline {
             
             // Authenticate with Docker Hub
             echo "🔐 Logging in to Docker Hub as ${DOCKER_USERNAME}..."
-            bat "echo %DOCKER_PASSWORD% | docker login -u %DOCKER_USERNAME% --password-stdin"
+            sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
             
             // Push versioned image (specific to this build)
             echo "📤 Pushing ${REGISTRY_IMAGE}:${IMAGE_TAG}..."
-            bat "docker push ${REGISTRY_IMAGE}:${IMAGE_TAG}"
+            sh "docker push ${REGISTRY_IMAGE}:${IMAGE_TAG}"
             
             // Push latest image (overwrites previous 'latest')
             echo "📤 Pushing ${REGISTRY_IMAGE}:latest..."
-            bat "docker push ${REGISTRY_IMAGE}:latest"
+            sh "docker push ${REGISTRY_IMAGE}:latest"
             
             // Logout for security best practices
-            bat "docker logout"
+            sh "docker logout"
             
             echo "✅ Images pushed successfully to Docker Hub from local machine!"
             echo "🐳 Available at: https://hub.docker.com/r/khushalbhavsar/employee-management"
@@ -185,17 +188,16 @@ pipeline {
     always {
       // Archive build artifacts for later reference
       // Saves JAR files with fingerprinting for tracking
-      archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+      archiveArtifacts artifacts: 'target/*.jar', fingerprint: true, allowEmptyArchive: true
 
       script {
-        // Clean up test containers to free resources (on local machine)
-        // Using bat command for Windows compatibility
-        bat "docker stop employee-management-test || exit 0"
-        bat "docker rm employee-management-test || exit 0"
+        // Clean up test containers to free resources
+        sh "docker stop employee-management-test || true"
+        sh "docker rm employee-management-test || true"
         
         // Clean up dangling Docker images to save disk space
         // -f: Force removal without confirmation
-        bat "docker image prune -f || exit 0"
+        sh "docker image prune -f || true"
       }
     }
 
