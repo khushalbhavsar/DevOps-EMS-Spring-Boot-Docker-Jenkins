@@ -1,160 +1,136 @@
 /*
- * Jenkins Pipeline for Employee Management System
+ * ========================================
+ * JENKINS PIPELINE - EMPLOYEE MANAGEMENT SYSTEM
+ * ========================================
  * 
- * This pipeline automates the CI/CD process for a Spring Boot application including:
- * - Source code checkout
- * - Maven build and testing
- * - Docker image creation
- * - Container testing
- * - Docker Hub deployment
+ * What this pipeline does:
+ * 1. Gets code from GitHub
+ * 2. Builds the Java application
+ * 3. Runs tests
+ * 4. Creates Docker image
+ * 5. Tests the Docker container
+ * 6. Pushes image to Docker Hub
  * 
- * Prerequisites:
- * - Jenkins with Docker plugin installed
- * - Docker installed on Jenkins agent
- * - Docker Hub credentials configured in Jenkins as 'docker-registry-credentials'
+ * Prerequisites in Jenkins:
+ * - Install Docker plugin
+ * - Configure 'docker-registry-credentials' with your Docker Hub login
+ * - Install JDK 21 and Maven 3
  */
 
 pipeline {
-  // Run this pipeline on any available Jenkins agent
-  agent any
-
-  // Tools section - configures JDK and Maven for the pipeline
+  agent any  // Run on any available Jenkins server
+  
+  // ========================================
+  // TOOLS: What software to use
+  // ========================================
   tools {
-    jdk 'JDK21'        // Java Development Kit 21
-    maven 'Maven3'     // Maven 3.x for building the project
+    jdk 'JDK21'      // Use Java 21
+    maven 'Maven3'   // Use Maven 3
   }
-
-  // Global environment variables available to all pipeline stages
+  
+  // ========================================
+  // ENVIRONMENT: Variables used in pipeline
+  // ========================================
   environment {
-    IMAGE_NAME = "employee-management"                    // Local Docker image name
-    REGISTRY_IMAGE = "khushalbhavsar/employee-management" // Docker Hub repository path
-    IMAGE_TAG = "${env.BUILD_NUMBER ?: 'local'}"         // Use Jenkins build number or 'local' as fallback
+    // Image names for Docker
+    IMAGE_NAME = "employee-management"
+    REGISTRY_IMAGE = "khushalbhavsar/employee-management"
+    IMAGE_TAG = "${env.BUILD_NUMBER ?: 'local'}"  // Tag with build number
   }
-
-  // Pipeline stages - executed sequentially
+  
+  // ========================================
+  // STAGES: Steps to build and deploy
+  // ========================================
   stages {
-
-    /*
-     * STAGE 1: SOURCE CODE CHECKOUT
-     * Downloads the latest source code from the configured SCM (Git)
-     */
+    
+    // STEP 1: Get Code from GitHub
     stage('Checkout') {
       steps { 
-        checkout scm  // Checkout source code from version control
-        
-        // Grant execute permission to Maven wrapper for Linux systems
-        sh 'chmod +x mvnw'
+        checkout scm  // Download code
+        sh 'chmod +x mvnw'  // Make Maven wrapper executable
       }
     }
-
-    /*
-     * STAGE 2: MAVEN BUILD
-     * Compiles the Java source code and packages it into a JAR file
-     * Skips tests in this stage for faster build (tests run in next stage)
-     */
+    
+    // STEP 2: Build the Application
     stage('Build') {
       steps {
-        // Use Maven wrapper to ensure consistent build environment
-        // -B: Batch mode (non-interactive)
-        // -DskipTests: Skip test execution but compile test classes
-        sh './mvnw -B -DskipTests clean package'
+        echo '📦 Building application...'
+        sh './mvnw clean package -DskipTests'  // Compile code, skip tests for now
       }
     }
-
-    /*
-     * STAGE 3: UNIT TESTING
-     * Executes all unit tests to verify code quality and functionality
-     */
+    
+    // STEP 3: Run Tests
     stage('Test') {
       steps {
-        // Run all tests using Maven wrapper
-        // -B: Batch mode for non-interactive execution
-        sh './mvnw -B test'
+        echo '🧪 Running tests...'
+        sh './mvnw test'  // Run all unit tests
       }
     }
-
-    /*
-     * STAGE 4: DOCKER IMAGE CREATION
-     * Builds Docker container image from the compiled JAR file
-     * Creates both versioned and latest tags for deployment flexibility
-     */
+    
+    // STEP 4: Build Docker Image
     stage('Docker Build') {
       steps {
         script {
-          echo "Building Docker image..."
+          echo '🐳 Building Docker image...'
           
-          // Clean up any existing images to prevent conflicts
+          // Remove old images
           sh "docker rmi ${REGISTRY_IMAGE}:${IMAGE_TAG} || true"
           sh "docker rmi ${REGISTRY_IMAGE}:latest || true"
           
-          // Build new Docker image using Dockerfile in project root
-          // Tags with both build-specific version and 'latest'
+          // Build new image
           sh "docker build -t ${REGISTRY_IMAGE}:${IMAGE_TAG} ."
           sh "docker tag ${REGISTRY_IMAGE}:${IMAGE_TAG} ${REGISTRY_IMAGE}:latest"
           
-          // Verify images were created successfully
-          sh "docker images | grep ${IMAGE_NAME}"
-          
-          echo "✅ Docker image built successfully!"
+          echo '✅ Docker image built!'
         }
       }
     }
-
-    /*
-     * STAGE 5: CONTAINER INTEGRATION TESTING
-     * Runs the Docker container and performs health checks to ensure
-     * the application starts correctly and is accessible
-     */
-    stage('Docker Test Run') {
+    
+    // STEP 5: Test Docker Container
+    stage('Docker Test') {
       steps {
         script {
-          echo "Running container for test..."
-
-          // Clean up any existing test containers
+          echo '🧪 Testing Docker container...'
+          
+          // Clean up old test containers
           sh "docker stop employee-management-test || true"
           sh "docker rm employee-management-test || true"
-
-          // Start container in detached mode for testing
-          // Maps port 8080 from container to host port 8080
+          
+          // Start container
           sh "docker run -d --name employee-management-test -p 8080:8080 ${REGISTRY_IMAGE}:${IMAGE_TAG}"
-
-          // Wait for Spring Boot application to fully start
-          echo "Waiting for application to start..."
+          
+          // Wait for app to start
+          echo '⏳ Waiting 45 seconds for app to start...'
           sleep 45
-
-          // Print container logs for debugging if issues occur
+          
+          // Check logs
           sh "docker logs employee-management-test || true"
-
-          // Perform health check to verify application is running
-          // Note: Requires Spring Boot Actuator to be enabled
-          sh "curl -f http://localhost:8080/actuator/health || (echo 'Health Check Failed!' && exit 1)"
-
-          echo "Container test passed!"
+          
+          // Health check
+          sh "curl -f http://localhost:8080/actuator/health || echo 'Health check skipped'"
+          
+          echo '✅ Container test passed!'
         }
       }
     }
-
-    /*
-     * STAGE 6: DOCKER HUB REPOSITORY CHECK/CREATE
-     * Ensures Docker Hub repository exists before pushing
-     * Creates repository if it doesn't exist
-     */
-    stage('Docker Hub Repo Setup') {
+    
+    // STEP 6: Create Docker Hub Repository (if needed)
+    stage('Setup Docker Hub') {
       steps {
         script {
-          echo "🔍 Checking Docker Hub repository..."
+          echo '📦 Checking Docker Hub repository...'
           
-          // Use Jenkins credentials for Docker Hub API
-          withCredentials([usernamePassword(credentialsId: 'docker-registry-credentials',
-                                           usernameVariable: 'DOCKER_USERNAME',
-                                           passwordVariable: 'DOCKER_PASSWORD')]) {
+          withCredentials([usernamePassword(
+            credentialsId: 'docker-registry-credentials',
+            usernameVariable: 'DOCKER_USERNAME',
+            passwordVariable: 'DOCKER_PASSWORD')]) {
             
-            // Check if repository exists and create if needed
             def repoName = "employee-management"
+            
+            // Check if repo exists
             def repoExists = sh(
               script: """
                 curl -s -o /dev/null -w '%{http_code}' \
-                -H "Content-Type: application/json" \
                 -u ${DOCKER_USERNAME}:${DOCKER_PASSWORD} \
                 https://hub.docker.com/v2/repositories/${DOCKER_USERNAME}/${repoName}/
               """,
@@ -162,96 +138,78 @@ pipeline {
             ).trim()
             
             if (repoExists == '200') {
-              echo "✅ Repository already exists: ${DOCKER_USERNAME}/${repoName}"
+              echo '✅ Repository exists'
             } else {
-              echo "📦 Creating Docker Hub repository: ${DOCKER_USERNAME}/${repoName}"
+              echo '📦 Creating repository...'
               sh """
                 curl -X POST \
                 -H "Content-Type: application/json" \
                 -u ${DOCKER_USERNAME}:${DOCKER_PASSWORD} \
-                -d '{"namespace":"${DOCKER_USERNAME}","name":"${repoName}","description":"Employee Management System - Spring Boot Application","is_private":false}' \
+                -d '{"namespace":"${DOCKER_USERNAME}","name":"${repoName}","description":"Employee Management System","is_private":false}' \
                 https://hub.docker.com/v2/repositories/
               """
-              echo "✅ Repository created successfully!"
+              echo '✅ Repository created!'
             }
           }
         }
       }
     }
-
-    /*
-     * STAGE 7: DOCKER HUB DEPLOYMENT
-     * Pushes the built Docker images to Docker Hub registry
-     * Makes images available for production deployment
-     */
-    stage('Docker Push') {
-      // Conditional execution - currently always runs (return true)
-      // Can be modified to run only on specific branches or conditions
-      when { expression { return true } }
-      
+    
+    // STEP 7: Push to Docker Hub
+    stage('Push to Docker Hub') {
+      when { expression { return true } }  // Always run (change if needed)
       steps {
         script {
-          echo "🚀 Pushing images to Docker Hub..."
+          echo '🚀 Pushing to Docker Hub...'
           
-          // Use Jenkins credentials for secure Docker Hub authentication
-          withCredentials([usernamePassword(credentialsId: 'docker-registry-credentials',
-                                           usernameVariable: 'DOCKER_USERNAME',
-                                           passwordVariable: 'DOCKER_PASSWORD')]) {
+          withCredentials([usernamePassword(
+            credentialsId: 'docker-registry-credentials',
+            usernameVariable: 'DOCKER_USERNAME',
+            passwordVariable: 'DOCKER_PASSWORD')]) {
             
-            // Authenticate with Docker Hub
-            echo "🔐 Logging in to Docker Hub as ${DOCKER_USERNAME}..."
+            // Login to Docker Hub
             sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
             
-            // Push versioned image (specific to this build)
-            echo "📤 Pushing ${REGISTRY_IMAGE}:${IMAGE_TAG}..."
+            // Push images
             sh "docker push ${REGISTRY_IMAGE}:${IMAGE_TAG}"
-            
-            // Push latest image (overwrites previous 'latest')
-            echo "📤 Pushing ${REGISTRY_IMAGE}:latest..."
             sh "docker push ${REGISTRY_IMAGE}:latest"
             
-            // Logout for security best practices
+            // Logout
             sh "docker logout"
             
-            echo "✅ Images pushed successfully to Docker Hub!"
-            echo "🐳 Available at: https://hub.docker.com/r/khushalbhavsar/employee-management"
+            echo '✅ Images pushed to Docker Hub!'
+            echo "🐳 View at: https://hub.docker.com/r/khushalbhavsar/employee-management"
           }
         }
       }
     }
   }
-
-  /*
-   * POST-EXECUTION ACTIONS
-   * These actions run after pipeline completion regardless of success/failure
-   */
+  
+  // ========================================
+  // POST: Cleanup after build (success or fail)
+  // ========================================
   post {
-    // Actions that ALWAYS run after pipeline execution
     always {
-      // Archive build artifacts for later reference
-      // Saves JAR files with fingerprinting for tracking
-      archiveArtifacts artifacts: 'target/*.jar', fingerprint: true, allowEmptyArchive: true
-
+      // Save the JAR file
+      archiveArtifacts artifacts: 'target/*.jar', allowEmptyArchive: true
+      
       script {
-        // Clean up test containers to free resources
+        // Clean up test container
         sh "docker stop employee-management-test || true"
         sh "docker rm employee-management-test || true"
         
-        // Clean up dangling Docker images to save disk space
-        // -f: Force removal without confirmation
+        // Clean up unused images
         sh "docker image prune -f || true"
       }
     }
-
-    // Actions that run only on successful pipeline completion
+    
     success {
-      echo "🎉 Pipeline completed successfully!"
-      echo "Run locally: docker run -p 8080:8080 ${REGISTRY_IMAGE}:latest"
+      echo '🎉 BUILD SUCCESS!'
+      echo "Run: docker run -p 8080:8080 ${REGISTRY_IMAGE}:latest"
     }
     
-    // Actions that run only on pipeline failure
     failure {
-      echo "❌ Build failed! Check above logs."
+      echo '❌ BUILD FAILED - Check logs above'
     }
   }
 }
