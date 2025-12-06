@@ -36,7 +36,7 @@
     Inherited from parent but can be overridden here
   -->
   <properties>
-    <java.version>21</java.version>                           <!-- Java version for compilation -->
+    <java.version>20</java.version>                           <!-- Java version for compilation -->
     <maven.compiler.source>${java.version}</maven.compiler.source>   <!-- Source code Java version -->
     <maven.compiler.target>${java.version}</maven.compiler.target>   <!-- Target bytecode Java version -->
   </properties>
