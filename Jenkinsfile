@@ -1,6 +1,10 @@
 pipeline {
     agent { label 'dev-server' }
     
+    tools {
+        maven 'myMaven'
+    }
+    
     stages {
         stage("Code Clone") {
             steps {
@@ -9,9 +13,16 @@ pipeline {
             }
         }
         
-        stage("Code Build & Test") {
+        stage("Maven Build") {
             steps {
-                echo "Code Build Stage"
+                echo "Building Java Application with Maven"
+                sh "mvn clean package -DskipTests"
+            }
+        }
+        
+        stage("Docker Build") {
+            steps {
+                echo "Building Docker Image"
                 sh "docker build -t employee-management ."
             }
         }
