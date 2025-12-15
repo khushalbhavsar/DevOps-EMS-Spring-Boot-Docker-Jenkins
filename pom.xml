@@ -1,134 +1,97 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- 
-  Maven Project Object Model (POM) file for Employee Management System
-  This file defines the project structure, dependencies, and build configuration
-  for a Spring Boot application with web interface and JPA database integration
--->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   
-  <!-- POM model version - always 4.0.0 for Maven 2+ -->
   <modelVersion>4.0.0</modelVersion>
   
-  <!-- Project identification coordinates (GAV - Group, Artifact, Version) -->
-  <groupId>com.example</groupId>                    <!-- Organization/company namespace -->
-  <artifactId>employee-management</artifactId>     <!-- Project name/identifier -->
-  <version>0.0.1-SNAPSHOT</version>                <!-- Project version (SNAPSHOT = development) -->
-  <packaging>jar</packaging>                       <!-- Output format - JAR file for Spring Boot -->
+  <groupId>com.example</groupId>
+  <artifactId>employee-management</artifactId>
+  <version>0.0.1-SNAPSHOT</version>
+  <packaging>jar</packaging>
 
-  <!-- 
-    Parent POM - Spring Boot Starter Parent
-    Provides dependency management, plugin configuration, and sensible defaults
-    for Spring Boot projects. This eliminates need to specify versions for
-    most Spring Boot dependencies and plugins.
-  -->
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
     <version>3.1.4</version>
-    <relativePath/> <!-- lookup parent from repository instead of filesystem -->
+    <relativePath/>
   </parent>
 
-  <!-- 
-    Project Properties
-    Define variables that can be referenced throughout the POM
-    Inherited from parent but can be overridden here
-  -->
   <properties>
-    <java.version>17</java.version>                           <!-- Java version for compilation -->
-    <maven.compiler.source>${java.version}</maven.compiler.source>   <!-- Source code Java version -->
-    <maven.compiler.target>${java.version}</maven.compiler.target>   <!-- Target bytecode Java version -->
+    <java.version>17</java.version>
+    <maven.compiler.source>${java.version}</maven.compiler.source>
+    <maven.compiler.target>${java.version}</maven.compiler.target>
+    <sonar.organization>khushalbhavsar</sonar.organization>
+    <sonar.host.url>https://sonarcloud.io</sonar.host.url>
   </properties>
 
-  <!-- 
-    Dependencies Section
-    All external libraries and frameworks required by the application
-    Spring Boot starters provide pre-configured bundles of related dependencies
-  -->
   <dependencies>
-    
-    <!-- 
-      Spring Boot Web Starter
-      Includes: Spring Web MVC, Tomcat embedded server, Jackson for JSON,
-      Hibernate Validator, and other web-related dependencies
-      Used for: REST API endpoints, web controllers, HTTP request handling
-    -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-web</artifactId>
     </dependency>
 
-    <!-- 
-      Spring Boot Data JPA Starter
-      Includes: Spring Data JPA, Hibernate ORM, Spring ORM, AspectJ
-      Used for: Database operations, entity mapping, repository pattern,
-      transaction management, and database abstraction
-    -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-data-jpa</artifactId>
     </dependency>
 
-    <!-- 
-      H2 Database
-      Lightweight, in-memory database perfect for development and testing
-      Scope: runtime - only needed when application is running, not for compilation
-      Features: Web console, SQL compatibility, fast performance
-    -->
     <dependency>
       <groupId>com.h2database</groupId>
       <artifactId>h2</artifactId>
       <scope>runtime</scope>
     </dependency>
 
-    <!-- 
-      Spring Boot Test Starter
-      Includes: JUnit 5, Mockito, AssertJ, Hamcrest, Spring Test
-      Scope: test - only available during test compilation and execution
-      Used for: Unit tests, integration tests, mock objects, test assertions
-    -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
       <scope>test</scope>
     </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-registry-prometheus</artifactId>
+    </dependency>
   </dependencies>
 
-  <!-- 
-    Build Configuration
-    Defines how the project should be compiled, tested, and packaged
-  -->
   <build>
     <plugins>
-      
-      <!-- 
-        Spring Boot Maven Plugin
-        Essential plugin for Spring Boot applications that:
-        1. Packages the application as an executable JAR with embedded server
-        2. Provides spring-boot:run goal for running the app during development
-        3. Creates fat JAR with all dependencies included
-        4. Enables easy deployment and distribution
-      -->
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
-        <configuration>
-          <!-- 
-            Excludes section - removes specific dependencies from the fat JAR
-            Lombok is excluded because it's only needed at compile time for
-            code generation, not at runtime
-          -->
-          <excludes>
-            <exclude>
-              <groupId>org.projectlombok</groupId>
-              <artifactId>lombok</artifactId>
-            </exclude>
-          </excludes>
-        </configuration>
       </plugin>
-      
+
+      <plugin>
+        <groupId>org.sonarsource.scanner.maven</groupId>
+        <artifactId>sonar-maven-plugin</artifactId>
+        <version>3.10.0.2594</version>
+      </plugin>
+
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>0.8.11</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>prepare-agent</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>report</id>
+            <phase>test</phase>
+            <goals>
+              <goal>report</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
     </plugins>
   </build>
-  
+
 </project>

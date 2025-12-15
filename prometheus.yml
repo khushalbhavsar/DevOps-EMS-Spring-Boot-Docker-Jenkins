@@ -1,0 +1,36 @@
+# Prometheus Configuration
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Spring Boot Application Metrics
+  - job_name: 'employee-management'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['employee-management:8080']
+        labels:
+          application: 'employee-management'
+          environment: 'development'
+
+  # SonarQube Metrics
+  - job_name: 'sonarqube'
+    metrics_path: '/api/monitoring/metrics'
+    static_configs:
+      - targets: ['sonarqube:9000']
+        labels:
+          application: 'sonarqube'
+          environment: 'development'
+
+  # Prometheus Self-Monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Grafana Metrics
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+        labels:
+          application: 'grafana'
+          environment: 'development'

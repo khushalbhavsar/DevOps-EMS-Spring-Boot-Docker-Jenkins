@@ -1,0 +1,60 @@
+{
+  "dashboard": {
+    "title": "Employee Management - Application Metrics",
+    "tags": ["spring-boot", "employee-management"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "JVM Memory Usage",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "jvm_memory_used_bytes{application=\"employee-management\"}",
+            "legendFormat": "{{area}} - {{id}}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "HTTP Request Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(http_server_requests_seconds_count{application=\"employee-management\"}[5m])",
+            "legendFormat": "{{uri}} - {{method}}"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "CPU Usage",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "process_cpu_usage{application=\"employee-management\"}",
+            "legendFormat": "CPU Usage"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Active Database Connections",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "hikaricp_connections_active{application=\"employee-management\"}",
+            "legendFormat": "Active Connections"
+          }
+        ]
+      }
+    ],
+    "refresh": "10s",
+    "schemaVersion": 16,
+    "version": 0
+  }
+}
