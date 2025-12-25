@@ -33,7 +33,8 @@ services:
     profiles:
       - with-sonarqube
 
-  # Prometheus for metrics collection
+  # Prometheus for metrics collection (OPTIONAL - use profile to enable)
+  # Already running as standalone service on server at localhost:9090
   prometheus:
     image: prom/prometheus:latest
     ports:
@@ -46,8 +47,11 @@ services:
       - '--storage.tsdb.path=/prometheus'
     networks:
       - app-network
+    profiles:
+      - with-monitoring
 
-  # Grafana for metrics visualization
+  # Grafana for metrics visualization (OPTIONAL - use profile to enable)
+  # Already running as standalone service on server at localhost:3000
   grafana:
     image: grafana/grafana:latest
     ports:
@@ -63,6 +67,8 @@ services:
       - app-network
     depends_on:
       - prometheus
+    profiles:
+      - with-monitoring
 
   # Optional: Add database service for production-like testing
   postgres:
