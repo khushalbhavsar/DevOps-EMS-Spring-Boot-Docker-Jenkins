@@ -1,207 +1,277 @@
-# EC2 Setup Guide: Jenkins, SonarQube, Grafana-Prometheus-Node Exporter
+# EC2 Setup: Jenkins, Grafana, Prometheus, Node Exporter & SonarQube
 
-## Table of Contents
-1. [Jenkins Setup](#jenkins-setup)
-2. [SonarQube Setup](#sonarqube-setup)
-3. [Grafana-Prometheus-Node Exporter Setup](#grafana-prometheus-node-exporter-setup)
+Complete DevOps monitoring and CI/CD stack setup guide for Amazon Linux 2 EC2 instances.
 
 ---
 
-## Jenkins Setup
+## 📋 Table of Contents
 
-### Jenkins Setup on AWS EC2 (Amazon Linux 2)
+1. [Jenkins Setup](#jenkins-setup)
+2. [SonarQube Setup](#sonarqube-setup)
+3. [Grafana & Prometheus Setup](#grafana--prometheus-setup)
+4. [Node Exporter Setup](#node-exporter-setup)
+5. [Alert Configuration](#alert-configuration)
+6. [Testing & Verification](#testing--verification)
 
-#### Instance Details
-- **EC2 Type**: t3.large or c7i-flex.large
-- **Key**: jenkins.pem
-- **SG Inbound Rule**: Port 8080 Enabled
-- **User**: ec2-user
+---
 
-#### Step 1: Connect to EC2
+## 🔧 Jenkins Setup
+
+### 📌 Prerequisites
+
+| Resource | Requirement |
+|----------|-------------|
+| **EC2 Instance Type** | t3.large recommended |
+| **OS** | Amazon Linux 2023 |
+| **Storage** | 30 GB SSD |
+| **Key Pair** | jenkins.pem |
+
+### 🔓 Security Group - Inbound Rules
+
+| Port | Protocol | Purpose |
+|------|----------|---------|
+| 22 | TCP | SSH |
+| 80 | TCP | HTTP |
+| 443 | TCP | HTTPS |
+| 8080 | TCP | Jenkins UI |
+
+### ⚙️ Step 1: Connect to EC2 Instance
+
 ```bash
-cd ~/Downloads
+cd Downloads
 chmod 400 jenkins.pem
-ssh -i "jenkins.pem" ec2-user@ec2-52-204-224-228.compute-1.amazonaws.com
+ssh -i "jenkins.pem" ec2-user@<YOUR_EC2_PUBLIC_IP>
 ```
 
-#### Step 2: Install Dependencies
+### 📦 Step 2: Install Required Packages
+
+#### 2.1 Update and Install Git
+
 ```bash
 sudo yum update -y
-sudo yum install wget tar tree python -y
+sudo yum install git -y
+git --version
 ```
 
-#### Step 3: Install Git
+#### 2.2 Configure Git (Optional)
+
 ```bash
-sudo yum install git -y
-git config --global user.name "Atul Kamble"
-git config --global user.email "atul_kamble@example.com"
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"
 git config --list
 ```
 
-#### Step 4: Install Docker
+#### 2.3 Install Docker
+
 ```bash
 sudo yum install docker -y
 sudo systemctl start docker
 sudo systemctl enable docker
-sudo docker login
+sudo usermod -aG docker ec2-user
 docker --version
 ```
-> **Note**: Add Jenkins user later after Jenkins installation.
 
-#### Step 5: Install Maven
+#### 2.4 Install Java 21 (Amazon Corretto)
+
+```bash
+# Option 1: Amazon Corretto
+sudo dnf install java-21-amazon-corretto -y
+
+# Option 2: OpenJDK
+sudo yum install java-21-openjdk -y
+
+java --version
+```
+
+#### 2.5 Install Maven
+
 ```bash
 sudo yum install maven -y
 mvn -v
 ```
 
-#### Step 6: Install Java 21 (Amazon Corretto)
-```bash
-sudo yum install java-21-amazon-corretto.x86_64 -y
-java --version
-```
+#### 2.6 Install Jenkins via YUM Repository
 
-#### Step 7: Install Jenkins
 ```bash
 sudo wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
 sudo rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
-
 sudo yum upgrade -y
-sudo yum install fontconfig java-21-openjdk -y
 sudo yum install jenkins -y
-
-sudo systemctl daemon-reload
-```
-
-#### Step 8: Start & Enable Jenkins
-```bash
-sudo systemctl start jenkins
-sudo systemctl enable jenkins
 jenkins --version
 ```
 
-#### Step 9: Allow Jenkins to Use Docker
+#### 2.7 Add Jenkins User to Docker Group
+
 ```bash
 sudo usermod -aG docker jenkins
-sudo systemctl restart docker
-sudo systemctl restart jenkins
 ```
 
-#### Get Jenkins Setup Password
+### ▶️ Step 3: Start Jenkins Service
+
 ```bash
-sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+sudo systemctl start jenkins
+sudo systemctl enable jenkins
+sudo systemctl status jenkins
 ```
 
-#### Access Jenkins in Browser
-1. Open: `http://<EC2-Public-IP>:8080`
-2. Paste password
-3. Continue Setup
-4. Install Suggested Plugins
+### 🌐 Step 4: Access Jenkins Web UI
 
-#### Install Plugins Manually (If missing)
-- Docker
-- Docker Pipeline
-- Blue Ocean
-- AWS Credentials Plugin
+1. Open browser and navigate to:
+   ```
+   http://<YOUR_EC2_PUBLIC_IP>:8080
+   ```
 
-**Restart Jenkins:**
+2. Retrieve initial admin password:
+   ```bash
+   sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+   ```
+
+3. Paste the password in Jenkins setup screen
+4. Complete initial configuration
+
+### 🐳 Alternative: Jenkins via Docker
+
 ```bash
-sudo systemctl restart jenkins
+# Pull Jenkins image with JDK 21
+sudo docker pull jenkins/jenkins:jdk21
+
+# Run Jenkins container
+sudo docker run -d \
+  --name jenkins \
+  -p 8080:8080 \
+  -p 50000:50000 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v jenkins_home:/var/jenkins_home \
+  jenkins/jenkins:jdk21
+
+# List containers
+sudo docker container ls
+
+# Get initial admin password
+sudo docker exec -it <CONTAINER_ID> cat /var/jenkins_home/secrets/initialAdminPassword
 ```
 
 ---
 
-## SonarQube Setup
+## ☁️ SonarQube Setup
 
-### SonarQube on EC2 — Step-by-Step Guide
+### 📌 Prerequisites
 
-#### Prerequisites
-- EC2 instance with sudo privileges
-- Open port 9000 for SonarQube in the instance/security group
-- At least 2–4 GB RAM (more recommended for production)
-- Replace placeholder values below (Postgres password, SONAR_TOKEN)
+- **Instance Type**: t2.medium / t3.medium (minimum 4GB RAM)
+- **OS**: Amazon Linux 2
+- **Port Required**: 9000
+- **Storage**: 20GB SSD
+- **Key Pair**: sonar.pem
 
-#### 1. Update System & Install Utilities
+### ⚙️ Step 1: Update System Packages
+
 ```bash
 sudo yum update -y
-# or if using dnf
 sudo dnf update -y
-sudo yum install unzip git -y
+sudo yum install unzip wget -y
 ```
 
-#### 2. Install Java (Amazon Corretto 17)
+### 2️⃣ Step 2: Install Java 17
+
 ```bash
+sudo yum search java-17
 sudo yum install java-17-amazon-corretto.x86_64 -y
 java --version
 ```
 
-#### 3. Install PostgreSQL 15 and Initialize DB
+### 3️⃣ Step 3: Install & Configure PostgreSQL 15
+
 ```bash
+# Install PostgreSQL
 sudo dnf install postgresql15.x86_64 postgresql15-server -y
-sudo /usr/pgsql-15/bin/postgresql-15-setup initdb   # or: sudo postgresql-setup --initdb
+sudo postgresql-setup --initdb
+
+# Start and enable service
 sudo systemctl start postgresql
 sudo systemctl enable postgresql
+sudo systemctl status postgresql
 ```
 
-##### 3.1 Set postgres Password and Create Sonar DB/User
+### 4️⃣ Step 4: Create SonarQube Database & User
+
 ```bash
-sudo passwd postgres                # set linux postgres user password (optional)
+# Set PostgreSQL password
+sudo passwd postgres
+# Set password: Admin@123 (retype)
+
+# Login as postgres user
 sudo -i -u postgres psql
 ```
 
-Inside psql (replace PASSWORD_HERE and sonar_user_password):
+Run SQL commands in PostgreSQL shell:
+
 ```sql
-CREATE USER sonar WITH ENCRYPTED PASSWORD 'SONAR_DB_PASSWORD';
-CREATE DATABASE sonarqube OWNER sonar;
+ALTER USER postgres WITH PASSWORD 'Admin@1234';
+CREATE DATABASE sonarqube;
+CREATE USER sonar WITH ENCRYPTED PASSWORD 'Sonar@123';
+GRANT ALL PRIVILEGES ON DATABASE sonarqube TO sonar;
 \q
 ```
-> **Note**: Don't commit or store SONAR_DB_PASSWORD in public repos.
 
-#### 4. Download & Install SonarQube
+### 5️⃣ Step 5: Download & Install SonarQube
+
 ```bash
 cd /opt
 sudo wget https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-10.6.0.92116.zip
 sudo unzip sonarqube-10.6.0.92116.zip
 sudo mv sonarqube-10.6.0.92116 sonarqube
+cd sonarqube
 ```
 
-#### 5. System Tuning Required by SonarQube
+### 6️⃣ Step 6: Configure System Limits
+
 ```bash
-# increase vm.max_map_count
+# Set kernel parameters
 echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
 sudo sysctl -p
 
-# increase limits for sonar user
-sudo tee -a /etc/security/limits.conf <<'EOF'
+# Set file descriptor limits
+sudo tee -a /etc/security/limits.conf <<EOF
 sonar   -   nofile   65536
 sonar   -   nproc    4096
 EOF
 ```
 
-#### 6. Create Sonar System User and Set Ownership
+### 7️⃣ Step 7: Configure SonarQube Database Settings
+
 ```bash
-sudo useradd -r -s /bin/false sonar   # -r creates a system user (optional - adjust flags as needed)
-sudo chown -R sonar:sonar /opt/sonarqube
-sudo chmod -R 755 /opt/sonarqube/bin/
-sudo chmod +x /opt/sonarqube/bin/linux-x86-64/sonar.sh
+sudo nano /opt/sonarqube/conf/sonar.properties
 ```
 
-#### 7. Configure SonarQube to Use PostgreSQL
-Edit `/opt/sonarqube/conf/sonar.properties` and set the DB section (uncomment + replace values):
+Add the following configuration:
 
 ```properties
 sonar.jdbc.username=sonar
-sonar.jdbc.password=SONAR_DB_PASSWORD
+sonar.jdbc.password=Sonar@123
 sonar.jdbc.url=jdbc:postgresql://localhost:5432/sonarqube
+sonar.search.javaopts=-Xmx512m -Xms512m -XX:MaxDirectMemorySize=256m
 ```
-Also (optional) set `sonar.web.host` and `sonar.web.port` if needed (default port 9000).
 
-#### 8. Create Systemd Service for SonarQube
-Create `/etc/systemd/system/sonarqube.service` with the content below:
+### 8️⃣ Step 8: Create SonarQube System User
+
+```bash
+sudo useradd sonar
+sudo chown -R sonar:sonar /opt/sonarqube
+sudo chmod -R 755 /opt/sonarqube/bin/
+```
+
+### 9️⃣ Step 9: Create Systemd Service File
+
+```bash
+sudo nano /etc/systemd/system/sonarqube.service
+```
+
+Paste the following configuration:
 
 ```ini
 [Unit]
-Description=SonarQube Service
-After=network.target
+Description=SonarQube LTS Service
+After=network.target postgresql.service
 
 [Service]
 Type=forking
@@ -209,134 +279,139 @@ User=sonar
 Group=sonar
 LimitNOFILE=65536
 LimitNPROC=4096
+
 Environment="JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64"
 Environment="PATH=/usr/lib/jvm/java-17-amazon-corretto.x86_64/bin:/usr/local/bin:/usr/bin:/bin"
+
 ExecStart=/opt/sonarqube/bin/linux-x86-64/sonar.sh start
 ExecStop=/opt/sonarqube/bin/linux-x86-64/sonar.sh stop
+
 Restart=always
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-Save, then reload systemd and start SonarQube:
+### 🔟 Step 10: Set Permissions & Start Service
+
 ```bash
-sudo systemctl daemon-reload
+sudo chmod +x /opt/sonarqube/bin/linux-x86-64/sonar.sh
+sudo chmod -R 755 /opt/sonarqube/bin/
+sudo chown -R sonar:sonar /opt/sonarqube
+
+# Reload systemd and start service
 sudo systemctl reset-failed sonarqube
+sudo systemctl daemon-reload
 sudo systemctl start sonarqube
 sudo systemctl enable sonarqube
 sudo systemctl status sonarqube -l
 ```
 
-#### 9. Verify SonarQube
-- Check logs: `/opt/sonarqube/logs/` (web.log, ce.log, sonar.log, es.log)
-- Open `http://<EC2_PUBLIC_IP>:9000` in browser
+### 💻 Access SonarQube Web UI
 
-#### 10. Install Sonar Scanner (CLI)
-```bash
-cd /opt
-sudo wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-7.3.0.5189-linux-x64.zip
-sudo unzip sonar-scanner-cli-7.3.0.5189-linux-x64.zip
-sudo mv sonar-scanner-7.3.0.5189-linux-x64 sonar-scanner
-
-# add to PATH for current user (or globally in /etc/profile.d/sonar.sh)
-echo 'export PATH=$PATH:/opt/sonar-scanner/bin' >> ~/.bashrc
-source ~/.bashrc
-sonar-scanner --version
+```
+URL: http://<EC2_PUBLIC_IP>:9000
+Default Login:
+  Username: admin
+  Password: admin
 ```
 
-#### 11. Example: Run Analysis from a Project
-```bash
-# export or set host/token; DO NOT expose token publicly
-export SONAR_HOST_URL=http://<EC2_PUBLIC_IP>:9000
-export SONAR_TOKEN=REPLACE_WITH_YOUR_TOKEN
-
-# from project root
-sonar-scanner \
-  -Dsonar.projectKey=helloworld-python \
-  -Dsonar.sources=. \
-  -Dsonar.host.url="$SONAR_HOST_URL" \
-  -Dsonar.token="$SONAR_TOKEN"
-```
+First login will prompt you to change the default password.
 
 ---
 
-## Grafana-Prometheus-Node Exporter Setup
+## 📊 Grafana & Prometheus Setup
 
-### Installation Guide: Grafana + Prometheus + Node Exporter (Monitoring Stack)
+### 📌 Prerequisites
 
-#### EC2 Instance Details
-- **Instance Type**: t3.medium
-- **OS**: Amazon Linux 2
+| Resource | Requirement |
+|----------|-------------|
+| **Instance Type** | t3.medium (minimum 2GB RAM) |
+| **OS** | Amazon Linux 2 |
+| **Ports** | 3000 (Grafana), 9090 (Prometheus), 9100 (Node Exporter) |
 
-#### Security Group Inbound Rules Required
+### 🔓 Security Group - Inbound Rules
 
-| Port | Purpose       |
-|------|---------------|
-| 3000 | Grafana       |
-| 9090 | Prometheus    |
-| 9100 | Node Exporter |
+| Port | Purpose |
+|------|---------|
+| 3000 | Grafana Web UI |
+| 9090 | Prometheus Web UI |
+| 9100 | Node Exporter Metrics |
 
----
-
-### Step 1: Install Grafana Server
+### ⚙️ Step 1: Install Grafana Server
 
 ```bash
+# Update system
 sudo yum update -y
-sudo yum install wget tar -y
-sudo yum install make -y
+sudo yum install wget tar make -y
+
+# Install Grafana Enterprise
 sudo yum install -y https://dl.grafana.com/grafana-enterprise/release/12.2.1/grafana-enterprise_12.2.1_18655849634_linux_amd64.rpm
 
+# Start and enable service
 sudo systemctl start grafana-server
 sudo systemctl enable grafana-server
 sudo systemctl status grafana-server
 
+# Verify version
 grafana-server --version
 ```
 
-#### Access UI in Browser
-- URL: `http://<EC2_PUBLIC_IP>:3000/`
+**Access Grafana Web UI:**
+```
+URL: http://<EC2_PUBLIC_IP>:3000/
+Username: admin
+Password: admin (change on first login)
+```
 
-#### Default Login
-- **Username**: admin
-- **Password**: admin (then set new password)
-- **Example new password**: Admin@123
+### 📈 Step 2: Install Prometheus
 
----
+#### 2.1 Download and Extract Prometheus
 
-### Step 2: Install Prometheus
-
-#### Download and Extract Prometheus
 ```bash
+cd /tmp
 wget https://github.com/prometheus/prometheus/releases/download/v3.5.0/prometheus-3.5.0.linux-amd64.tar.gz
 tar -xvf prometheus-3.5.0.linux-amd64.tar.gz
 mv prometheus-3.5.0.linux-amd64 prometheus
+cd prometheus
 ```
 
-#### Create Prometheus User
+#### 2.2 Create Prometheus User
+
 ```bash
 sudo useradd --no-create-home --shell /bin/false prometheus
 ```
 
-#### Move Binaries & Set Permissions
+#### 2.3 Set Up Prometheus Files
+
 ```bash
-cd prometheus
+cd /tmp/prometheus
+
+# Copy binaries
 sudo cp prometheus /usr/local/bin/
 sudo cp promtool /usr/local/bin/
-sudo mkdir /etc/prometheus /var/lib/prometheus
+
+# Create directories
+sudo mkdir -p /etc/prometheus /var/lib/prometheus
+
+# Copy configuration files
 sudo cp -r consoles/ console_libraries/ /etc/prometheus/
 sudo cp prometheus.yml /etc/prometheus/
 
+# Set permissions
 sudo chown -R prometheus:prometheus /etc/prometheus /var/lib/prometheus
 sudo chown prometheus:prometheus /usr/local/bin/prometheus /usr/local/bin/promtool
 ```
 
-#### Create Prometheus Systemd Service
+#### 2.4 Create Prometheus Systemd Service
+
 ```bash
 sudo nano /etc/systemd/system/prometheus.service
 ```
 
-Paste:
+Paste the following:
+
 ```ini
 [Unit]
 Description=Prometheus Monitoring
@@ -357,7 +432,8 @@ ExecStart=/usr/local/bin/prometheus \
 WantedBy=multi-user.target
 ```
 
-#### Enable & Start Service
+#### 2.5 Start Prometheus Service
+
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl start prometheus
@@ -365,29 +441,41 @@ sudo systemctl enable prometheus
 sudo systemctl status prometheus
 ```
 
-#### Access UI
-- URL: `http://<EC2_PUBLIC_IP>:9090`
+**Access Prometheus Web UI:**
+```
+URL: http://<EC2_PUBLIC_IP>:9090
+```
 
 ---
 
-### Step 3: Install Node Exporter (for system metrics)
+## 🖥️ Node Exporter Setup
+
+### ⚙️ Installation Steps
 
 ```bash
+cd /tmp
 wget https://github.com/prometheus/node_exporter/releases/download/v1.10.2/node_exporter-1.10.2.linux-amd64.tar.gz
 tar xvf node_exporter-1.10.2.linux-amd64.tar.gz
 cd node_exporter-1.10.2.linux-amd64
 
+# Copy binary
 sudo cp node_exporter /usr/local/bin
+
+# Create user
 sudo useradd node_exporter --no-create-home --shell /bin/false
+
+# Set permissions
 sudo chown node_exporter:node_exporter /usr/local/bin/node_exporter
 ```
 
-#### Create Node Exporter Service
+### Create Node Exporter Service
+
 ```bash
 sudo nano /etc/systemd/system/node_exporter.service
 ```
 
-Paste:
+Paste the following:
+
 ```ini
 [Unit]
 Description=Node Exporter
@@ -404,7 +492,8 @@ ExecStart=/usr/local/bin/node_exporter
 WantedBy=multi-user.target
 ```
 
-#### Enable Service
+### Start Node Exporter Service
+
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl start node_exporter
@@ -412,61 +501,21 @@ sudo systemctl enable node_exporter
 sudo systemctl status node_exporter
 ```
 
-#### Verify in Browser
-- URL: `http://<EC2_PUBLIC_IP>:9100/metrics`
+**Verify Metrics:**
+```
+URL: http://<EC2_PUBLIC_IP>:9100/metrics
+```
 
----
+### Add Node Exporter to Prometheus
 
-### Step 4: Add Node Exporter to Prometheus Config
+Edit Prometheus configuration:
 
-#### Edit Config
 ```bash
 sudo nano /etc/prometheus/prometheus.yml
 ```
 
-Add this under "scrape_configs":
-```yaml
-  - job_name: 'node_exporter'
-    static_configs:
-      - targets: ['localhost:9100']
-```
+Add this under `scrape_configs`:
 
-#### Restart Prometheus
-```bash
-sudo systemctl restart prometheus
-sudo systemctl status prometheus
-```
-
----
-
-### Final Verification
-
-| Component     | Status Check                      | Browser URL   |
-|---------------|-----------------------------------|---------------|
-| Grafana       | systemctl status grafana-server   | :3000         |
-| Prometheus    | systemctl status prometheus       | :9090         |
-| Node Exporter | systemctl status node_exporter    | :9100/metrics |
-
----
-
-### Popular Grafana Dashboard IDs
-
-Use these dashboard IDs when importing dashboards in Grafana:
-
-- **1860**: Node Exporter Full
-- **11074**: Node Exporter for Prometheus Dashboard
-- **405**: Node Exporter Server Metrics
-
----
-
-### Step 5: Configure Prometheus Full Setup
-
-#### Edit Prometheus Configuration
-```bash
-sudo nano /etc/prometheus/prometheus.yml
-```
-
-#### Complete Prometheus Configuration
 ```yaml
 global:
   scrape_interval: 15s
@@ -482,44 +531,39 @@ scrape_configs:
       - targets: ['localhost:9100']
 ```
 
-**Configuration Explained:**
-- `scrape_interval: 15s` - Collect metrics every 15 seconds
-- `job_name` - Label to identify the metrics source
-- `targets` - List of endpoints to scrape
+Restart Prometheus:
 
-#### Restart Prometheus
 ```bash
 sudo systemctl restart prometheus
+sudo systemctl status prometheus
 ```
-
-#### Verify Target is Up
-1. Open Prometheus UI: `http://<EC2_PUBLIC_IP>:9090`
-2. Go to Status → Targets
-3. You should see both `prometheus` and `node_exporter` with status UP
 
 ---
 
-### Step 6: Setting Up Alerts
+## 🚨 Alert Configuration
 
-#### Configure Alert Rules in Prometheus
+### ⚙️ Step 1: Create Alert Rules
+
 ```bash
 sudo nano /etc/prometheus/alert_rules.yml
 ```
 
-Add the following rules:
+Add the following alert rules:
+
 ```yaml
 groups:
   - name: node_alerts
     interval: 30s
     rules:
+      
       - alert: HighCPUUsage
         expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 30
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "High CPU usage detected"
-          description: "CPU usage is above 30% (current value: {{ $value }}%)"
+          summary: "High CPU usage detected on {{ $labels.instance }}"
+          description: "CPU usage is above 30% (current: {{ $value | humanizePercentage }})"
 
       - alert: HighMemoryUsage
         expr: 100 * (1 - ((node_memory_MemAvailable_bytes) / (node_memory_MemTotal_bytes))) > 80
@@ -527,8 +571,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "High memory usage detected"
-          description: "Memory usage is above 80% (current value: {{ $value }}%)"
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 80% (current: {{ $value | humanize }}%)"
 
       - alert: DiskSpaceLow
         expr: 100 - ((node_filesystem_avail_bytes{mountpoint="/"} * 100) / node_filesystem_size_bytes{mountpoint="/"}) > 80
@@ -536,8 +580,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Disk space is low"
-          description: "Disk usage is above 80% (current value: {{ $value }}%)"
+          summary: "Disk space low on {{ $labels.instance }}"
+          description: "Disk usage is above 80% (current: {{ $value | humanize }}%)"
 
       - alert: InstanceDown
         expr: up == 0
@@ -545,16 +589,18 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Instance is down"
-          description: "{{ $labels.instance }} is down"
+          summary: "Instance {{ $labels.instance }} is down"
+          description: "{{ $labels.instance }} has been down for more than 1 minute"
 ```
 
-#### Update Prometheus Configuration
+### 📝 Step 2: Update Prometheus Configuration
+
 ```bash
 sudo nano /etc/prometheus/prometheus.yml
 ```
 
-Add rule files section:
+Update to include alert rules:
+
 ```yaml
 global:
   scrape_interval: 15s
@@ -563,6 +609,11 @@ global:
 rule_files:
   - "alert_rules.yml"
 
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
 scrape_configs:
   - job_name: 'prometheus'
     static_configs:
@@ -573,33 +624,63 @@ scrape_configs:
       - targets: ['localhost:9100']
 ```
 
-#### Restart Prometheus
+### 🔄 Restart Prometheus
+
 ```bash
 sudo systemctl restart prometheus
+sudo systemctl status prometheus
 ```
 
-#### Verify Alerts
-1. Open Prometheus UI: `http://<EC2_PUBLIC_IP>:9090`
-2. Go to Alerts
-3. You should see all configured alerts
+### Verify Alerts
 
-#### Configure Grafana Alerts
-1. In Grafana, go to Alerting → Alert rules
-2. Click Create alert rule
-3. Configure based on your needs
-4. Set up notification channels (Email, Slack, PagerDuty, etc.)
+1. Open Prometheus: http://<EC2_PUBLIC_IP>:9090
+2. Go to **Alerts** tab
+3. All configured alerts should be listed
 
 ---
 
-### Step 7: CPU Stress Test Script
+## 🧪 Testing & Verification
 
-#### Create and Configure Stress Script
+### Component Status Check
+
+| Component | Status Command | Browser URL |
+|-----------|-----------------|-------------|
+| **Jenkins** | `sudo systemctl status jenkins` | http://IP:8080 |
+| **SonarQube** | `sudo systemctl status sonarqube` | http://IP:9000 |
+| **Prometheus** | `sudo systemctl status prometheus` | http://IP:9090 |
+| **Grafana** | `sudo systemctl status grafana-server` | http://IP:3000 |
+| **Node Exporter** | `sudo systemctl status node_exporter` | http://IP:9100/metrics |
+
+### Verify Prometheus Targets
+
+1. Open Prometheus: http://<EC2_PUBLIC_IP>:9090
+2. Go to **Status → Targets**
+3. Verify all targets show **UP** status
+
+### Import Grafana Dashboards
+
+Popular dashboard IDs:
+- **1860**: Node Exporter Full
+- **11074**: Node Exporter for Prometheus
+- **405**: Node Exporter Server Metrics
+
+**Steps:**
+1. Open Grafana: http://<EC2_PUBLIC_IP>:3000
+2. Click **+** → **Import**
+3. Enter dashboard ID
+4. Select Prometheus datasource
+5. Click **Import**
+
+### CPU Stress Test
+
+Create a test script to verify alerts:
+
 ```bash
-sudo touch stress.sh
 sudo nano stress.sh
 ```
 
-Paste the following script:
+Paste the script:
+
 ```bash
 #!/bin/bash
 
@@ -617,16 +698,52 @@ for i in $(seq 1 $CORES); do
 done
 
 echo "CPU load started on all $CORES cores..."
-echo "Run 'top' or 'htop' to verify CPU usage."
+echo "Monitor with: top or htop"
 ```
 
-#### Make Script Executable
+Make executable and run:
+
 ```bash
 sudo chmod +x stress.sh
-ls -l stress.sh
-```
-
-#### Run the Script
-```bash
 ./stress.sh
 ```
+
+Monitor CPU usage:
+```bash
+top
+# or
+htop
+```
+
+Stop the stress test:
+```bash
+# Press Ctrl+C or kill the process
+pkill -f "while true"
+```
+
+---
+
+## 🔒 Security Best Practices
+
+1. **Change default passwords** for all services
+2. **Enable firewall rules** and restrict port access
+3. **Use SSL/TLS certificates** for production
+4. **Set up authentication** for Jenkins and SonarQube
+5. **Regularly update** all packages and services
+6. **Monitor logs** for security issues
+7. **Backup database** regularly
+
+---
+
+## 📚 Additional Resources
+
+- [Jenkins Documentation](https://www.jenkins.io/doc/)
+- [SonarQube Setup Guide](https://docs.sonarqube.org/)
+- [Prometheus Documentation](https://prometheus.io/docs/)
+- [Grafana Documentation](https://grafana.com/docs/)
+- [Node Exporter Guide](https://github.com/prometheus/node_exporter)
+
+---
+
+**Last Updated**: December 25, 2025  
+**Version**: 2.0.0
