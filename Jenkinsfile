@@ -176,9 +176,9 @@ pipeline {
                         docker ps -q --filter "publish=9000" | xargs -r docker stop || true
                         docker ps -aq --filter "publish=9000" | xargs -r docker rm -f || true
                         
-                        # Stop any container using port 8080 (App)
-                        docker ps -q --filter "publish=8080" | xargs -r docker stop || true
-                        docker ps -aq --filter "publish=8080" | xargs -r docker rm -f || true
+                        # Stop any container using port 8081 (App - Jenkins uses 8080)
+                        docker ps -q --filter "publish=8081" | xargs -r docker stop || true
+                        docker ps -aq --filter "publish=8081" | xargs -r docker rm -f || true
                         
                         # Stop any container using port 9090 (Prometheus)
                         docker ps -q --filter "publish=9090" | xargs -r docker stop || true

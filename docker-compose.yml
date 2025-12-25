@@ -6,7 +6,7 @@ services:
   employee-management:
     build: .
     ports:
-      - "8080:8080"
+      - "8081:8080"  # External 8081 -> Container 8080 (Jenkins uses 8080)
     environment:
       - SPRING_PROFILES_ACTIVE=local
       - SPRING_DATASOURCE_URL=jdbc:h2:mem:testdb
