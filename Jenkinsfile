@@ -1,5 +1,10 @@
 pipeline {
-    agent { label 'dev-server' }
+    // Agent Configuration
+    // Option 1: Use 'any' available agent (default)
+    // Option 2: Use master/built-in node
+    // Option 3: Use specific label (requires Jenkins node setup)
+    agent any
+    // agent { label 'dev-server' }  // Uncomment if you have 'dev-server' label configured
 
     options {
         buildDiscarder(logRotator(numToKeepStr: '10'))
