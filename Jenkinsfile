@@ -64,12 +64,14 @@ pipeline {
                     echo "🔍 Running SonarQube Analysis"
                     script {
                         try {
-                            sh """
-                                mvn sonar:sonar \
-                                  -Dsonar.projectKey=employee-management \
-                                  -Dsonar.host.url=${SONAR_HOST_URL} \
-                                  -Dsonar.login=${SONAR_TOKEN}
-                            """
+                            withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN_SECRET')]) {
+                                sh '''
+                                    mvn sonar:sonar \
+                                      -Dsonar.projectKey=employee-management \
+                                      -Dsonar.host.url=$SONAR_HOST_URL \
+                                      -Dsonar.login=$SONAR_TOKEN_SECRET
+                                '''
+                            }
                         } catch (err) {
                             echo "⚠️ SonarQube failed, continuing pipeline"
                         }
